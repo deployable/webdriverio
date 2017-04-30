@@ -24,7 +24,7 @@ describe('connection retries', () => {
         await WebdriverIO.remote(conf).init()
     })
 
-    it('should fail with ECONNREFUSED if all connection attempts failed', async function () {
+    it('should fail with GENERAL if all connection attempts failed', async function () {
         // mock 4 request errors (3 of them retries)
         nock('http://localhost:4444')
             .post('/wd/hub/session')
@@ -34,11 +34,11 @@ describe('connection retries', () => {
         await WebdriverIO.remote(conf).init().catch(err => {
             expect(err).not.to.be.undefined
             expect(err.message).to.equal('Couldn\'t connect to selenium server')
-            expect(err.seleniumStack.type).to.equal('ECONNREFUSED')
+            expect(err.seleniumStack.type).to.equal('GENERAL')
         })
     })
 
-    it('should fail with ECONNREFUSED on first attempt if connectionRetryCount is set as zero', async function () {
+    it('should fail with GENERIC on first attempt if connectionRetryCount is set as zero', async function () {
         // mock 1 request error
         nock('http://localhost:4444')
             .post('/wd/hub/session')
@@ -50,10 +50,34 @@ describe('connection retries', () => {
         await WebdriverIO.remote(localConf).init().catch(err => {
             expect(err).not.to.be.undefined
             expect(err.message).to.equal('Couldn\'t connect to selenium server')
-            expect(err.seleniumStack.type).to.equal('ECONNREFUSED')
+            expect(err.seleniumStack.type).to.equal('GENERAL')
         })
     })
 
+    it('should fail with specific ENOTFOUND on first attempt if connectionRetryCount is set as zero', async function () {
+        // mock 1 request error
+        let err = new Error()
+        err.message = 'getaddrinfo ENOTFOUND baddnshost baddnshost:44446'
+        err.code = 'ENOTFOUND'
+        err.errno = 'ENOTFOUND'
+        err.syscall = 'getaddrinfo'
+        err.hostname = 'baddnshost'
+        err.host = 'baddnshost'
+        err.port = '4444'
+
+        nock('http://localhost:4444')
+            .post('/wd/hub/session')
+            .replyWithError(err)
+
+        const localConf = merge({}, conf)
+        localConf.connectionRetryCount = 0
+
+        await WebdriverIO.remote(localConf).init().catch(err => {
+            expect(err).not.to.be.undefined
+            expect(err.message).to.equal('Couldn\'t connect to selenium server - ENOTFOUND getaddrinfo')
+            expect(err.seleniumStack.type).to.equal('ENOTFOUND getaddrinfo')
+        })
+    })
     it('should use connectionRetryCount option in requests retrying', async function () {
         // mock 12 request errors
         nock('http://localhost:4444')
